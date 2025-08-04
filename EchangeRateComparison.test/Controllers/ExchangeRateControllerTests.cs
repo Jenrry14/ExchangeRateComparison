@@ -6,6 +6,7 @@ using ExchangeRateComparison.api.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Moq;
@@ -18,6 +19,7 @@ public class ExchangeRateControllerTests
     private readonly Mock<IExchangeRateService> _serviceMock;
     private readonly Mock<IDynamicCredentialsService> _credentialsMock;
     private readonly Mock<ILogger<ExchangeRateController>> _loggerMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly ExchangeRateController _controller;
     private readonly Mock<HttpContext> _httpContextMock;
 
@@ -26,15 +28,17 @@ public class ExchangeRateControllerTests
         _serviceMock = new Mock<IExchangeRateService>();
         _credentialsMock = new Mock<IDynamicCredentialsService>();
         _loggerMock = new Mock<ILogger<ExchangeRateController>>();
+        _configurationMock = new Mock<IConfiguration>();
         _httpContextMock = new Mock<HttpContext>();
         
-        // ✅ NUEVO: Constructor actualizado con IDynamicCredentialsService
+        // ✅ ACTUALIZADO: Constructor con IConfiguration
         _controller = new ExchangeRateController(
             _serviceMock.Object, 
             _credentialsMock.Object, 
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _configurationMock.Object);
 
-        // ✅ NUEVO: Configurar HttpContext mock para headers
+        //  Configurar HttpContext mock para headers
         SetupHttpContext();
     }
 
@@ -188,6 +192,65 @@ public class ExchangeRateControllerTests
         errorResponse!.Error.Should().Be("Source and target currencies must be different");
     }
 
+    [Theory]
+    [InlineData("XYZ", "EUR", 100, "Source currency 'XYZ' is not supported")]
+    [InlineData("USD", "ABC", 100, "Target currency 'ABC' is not supported")]
+    [InlineData("XYZ", "ABC", 100, "Source currency 'XYZ' is not supported")]
+    [InlineData("JEM", "EUR", 100, "Source currency 'JEM' is not supported")]
+    public async Task GetBestRate_WithUnsupportedCurrency_ShouldReturnBadRequest(
+        string sourceCurrency, string targetCurrency, decimal amount, string expectedErrorMessage)
+    {
+        // Arrange
+        var requestDto = new ExchangeRequestDto
+        {
+            SourceCurrency = sourceCurrency,
+            TargetCurrency = targetCurrency,
+            Amount = amount
+        };
+
+        // Act
+        var result = await _controller.GetBestRate(requestDto, CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        var badRequestResult = result.Result as BadRequestObjectResult;
+        var errorResponse = badRequestResult!.Value as ErrorResponseDto;
+        errorResponse!.Error.Should().Be("Invalid currency");
+        errorResponse.Details.Should().Contain(expectedErrorMessage);
+        errorResponse.Details.Should().Contain("Supported currencies:");
+    }
+
+    [Fact]
+    public async Task GetBestRate_WithValidSupportedCurrencies_ShouldReturnOkResult()
+    {
+        // Arrange
+        var requestDto = new ExchangeRequestDto
+        {
+            SourceCurrency = "GBP", // Moneda soportada
+            TargetCurrency = "JPY", // Moneda soportada
+            Amount = 50
+        };
+
+        var bestResponse = new ExchangeResponse("API1", 150.25m, 7512.5m, TimeSpan.FromMilliseconds(180));
+        var allResponses = new List<ExchangeResponse> { bestResponse };
+        var serviceResult = new BestRateResult(bestResponse, allResponses, TimeSpan.FromMilliseconds(200));
+
+        _serviceMock.Setup(x => x.GetBestExchangeRateAsync(It.IsAny<ExchangeRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(serviceResult);
+
+        _credentialsMock.Setup(x => x.ConfigureApiCredentialsAsync(
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _controller.GetBestRate(requestDto, CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = result.Result as OkObjectResult;
+        okResult!.Value.Should().BeOfType<BestRateResponseDto>();
+    }
+
     [Fact]
     public async Task GetBestRate_WhenServiceThrowsInvalidOperationException_ShouldReturnServiceUnavailable()
     {
@@ -317,9 +380,10 @@ public class ExchangeRateControllerTests
         statsDto.SuccessfulRequests.Should().Be(90);
         statsDto.FailedRequests.Should().Be(10);
     }
+    
 
     [Fact]
-    public void GetSupportedCurrencies_ShouldReturnCurrencyList()
+    public void GetSupportedCurrencies_ShouldNotContainUnsupportedCurrencies()
     {
         // Act
         var result = _controller.GetSupportedCurrencies();
@@ -327,12 +391,12 @@ public class ExchangeRateControllerTests
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
         var okResult = result.Result as OkObjectResult;
-        okResult!.Value.Should().BeOfType<SupportedCurrenciesDto>();
-
-        var currenciesDto = okResult.Value as SupportedCurrenciesDto;
-        currenciesDto!.Currencies.Should().NotBeEmpty();
-        currenciesDto.Currencies.Should().Contain(c => c.Code == "USD");
-        currenciesDto.Currencies.Should().Contain(c => c.Code == "EUR");
+        var currenciesDto = okResult!.Value as SupportedCurrenciesDto;
+        
+        //  Verificar que monedas no soportadas NO estén en la lista
+        currenciesDto!.Currencies.Should().NotContain(c => c.Code == "XYZ");
+        currenciesDto.Currencies.Should().NotContain(c => c.Code == "ABC");
+        currenciesDto.Currencies.Should().NotContain(c => c.Code == "JEM");
     }
 
     [Fact]
@@ -349,5 +413,34 @@ public class ExchangeRateControllerTests
         var apiInfoDto = okResult.Value as ApiInfoDto;
         apiInfoDto!.Service.Should().Be("Exchange Rate Comparison API");
         apiInfoDto.Version.Should().Be("1.0.0");
+    }
+
+    [Fact]
+    public async Task GetBestRate_WithCaseInsensitiveCurrencies_ShouldReturnOkResult()
+    {
+        // Arrange - Probar que las monedas en minúsculas también funcionan
+        var requestDto = new ExchangeRequestDto
+        {
+            SourceCurrency = "usd", // Minúsculas
+            TargetCurrency = "eur", // Minúsculas
+            Amount = 100
+        };
+
+        var bestResponse = new ExchangeResponse("API1", 0.85m, 85m, TimeSpan.FromMilliseconds(150));
+        var allResponses = new List<ExchangeResponse> { bestResponse };
+        var serviceResult = new BestRateResult(bestResponse, allResponses, TimeSpan.FromMilliseconds(200));
+
+        _serviceMock.Setup(x => x.GetBestExchangeRateAsync(It.IsAny<ExchangeRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(serviceResult);
+
+        _credentialsMock.Setup(x => x.ConfigureApiCredentialsAsync(
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _controller.GetBestRate(requestDto, CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
     }
 }

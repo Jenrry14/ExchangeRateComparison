@@ -51,7 +51,7 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
-    // ✅ NUEVO: Configurar headers de autenticación separados para cada API
+    //  Configurar headers de autenticación separados para cada API
     c.AddSecurityDefinition("Api1Key", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -76,7 +76,7 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API Key para API3 (ej: demo-api-key-3)"
     });
 
-    // ✅ NUEVO: Requerir todas las keys en los endpoints
+    //  Requerir todas las keys en los endpoints
     c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
         {
@@ -244,7 +244,7 @@ builder.Services.AddScoped<IExchangeRateClient, Api3Client>();
 // Registrar servicio principal
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 
-// ✅ NUEVO: Servicio para credenciales dinámicas
+//  Servicio para credenciales dinámicas
 builder.Services.AddScoped<IDynamicCredentialsService, DynamicCredentialsService>();
 
 // ===== CONFIGURACIÓN DE HEALTH CHECKS =====
@@ -288,7 +288,7 @@ app.UseSwaggerUI(c =>
     c.DefaultModelRendering(Swashbuckle.AspNetCore.SwaggerUI.ModelRendering.Model);
 });
 
-// ✅ NUEVO: Redirigir raíz a Swagger si no está funcionando
+//  Redirigir raíz a Swagger si no está funcionando
 app.MapGet("/", () => Results.Redirect("/index.html")).ExcludeFromDescription();
 
 // Middleware de manejo de errores

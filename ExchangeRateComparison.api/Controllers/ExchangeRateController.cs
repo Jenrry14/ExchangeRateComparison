@@ -11,6 +11,7 @@ using ExchangeRateComparison.api.Models.ExchangeRate;
 using ExchangeRateComparison.api.Services.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace ExchangeRateComparison.api.Controllers;
@@ -26,15 +27,27 @@ public class ExchangeRateController : ControllerBase
     private readonly IExchangeRateService _exchangeRateService;
     private readonly IDynamicCredentialsService _credentialsService;
     private readonly ILogger<ExchangeRateController> _logger;
+    private readonly IConfiguration _configuration;
+
+    // Lista de monedas soportadas
+    private static readonly HashSet<string> SupportedCurrencies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK", 
+        "DKK", "PLN", "CZK", "HUF", "BGN", "RON", "HRK", "RUB", "TRY", "BRL", 
+        "CNY", "INR", "KRW", "SGD", "HKD", "MXN", "ZAR", "THB", "MYR", "IDR", 
+        "PHP", "ILS"
+    };
 
     public ExchangeRateController(
         IExchangeRateService exchangeRateService, 
         IDynamicCredentialsService credentialsService,
-        ILogger<ExchangeRateController> logger)
+        ILogger<ExchangeRateController> logger,
+        IConfiguration configuration)
     {
         _exchangeRateService = exchangeRateService;
         _credentialsService = credentialsService;
         _logger = logger;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -60,7 +73,7 @@ public class ExchangeRateController : ControllerBase
         
         try
         {
-            // ✅ NUEVO: Leer las API keys de los headers
+            //  Leer las API keys de los headers
             var api1Key = Request.Headers["X-API1-Key"].FirstOrDefault();
             var api2Key = Request.Headers["X-API2-Key"].FirstOrDefault();
             var api3Key = Request.Headers["X-API3-Key"].FirstOrDefault();
@@ -71,7 +84,7 @@ public class ExchangeRateController : ControllerBase
             _logger.LogDebug("API Keys received - API1: {Api1HasKey}, API2: {Api2HasKey}, API3: {Api3HasKey} [TraceId: {TraceId}]",
                 !string.IsNullOrEmpty(api1Key), !string.IsNullOrEmpty(api2Key), !string.IsNullOrEmpty(api3Key), traceId);
 
-            // ✅ NUEVO: Validar que al menos una API key esté presente
+            // Validar que al menos una API key esté presente
             if (string.IsNullOrEmpty(api1Key) && string.IsNullOrEmpty(api2Key) && string.IsNullOrEmpty(api3Key))
             {
                 _logger.LogWarning("No API keys provided in headers [TraceId: {TraceId}]", traceId);
@@ -102,6 +115,19 @@ public class ExchangeRateController : ControllerBase
                 });
             }
 
+            //  Validar monedas soportadas
+            var currencyValidation = ValidateCurrencies(requestDto.SourceCurrency, requestDto.TargetCurrency);
+            if (!currencyValidation.IsValid)
+            {
+                _logger.LogWarning("Invalid currencies: {Details} [TraceId: {TraceId}]", currencyValidation.ErrorMessage, traceId);
+                return BadRequest(new ErrorResponseDto
+                {
+                    Error = "Invalid currency",
+                    Details = currencyValidation.ErrorMessage,
+                    TraceId = traceId
+                });
+            }
+
             // Validación adicional de negocio
             if (requestDto.SourceCurrency.Equals(requestDto.TargetCurrency, StringComparison.OrdinalIgnoreCase))
             {
@@ -112,10 +138,10 @@ public class ExchangeRateController : ControllerBase
                 });
             }
 
-            // ✅ NUEVO: Configurar credenciales dinámicamente
+            //Configurar credenciales dinámicamente
             await _credentialsService.ConfigureApiCredentialsAsync(api1Key, api2Key, api3Key);
 
-            // ✅ NUEVO: Almacenar credenciales en HttpContext para que los clientes las puedan leer
+            // Almacenar credenciales en HttpContext para que los clientes las puedan leer
             HttpContext.Items["API1_KEY"] = api1Key;
             HttpContext.Items["API2_KEY"] = api2Key;
             HttpContext.Items["API3_KEY"] = api3Key;
@@ -174,6 +200,33 @@ public class ExchangeRateController : ControllerBase
                 TraceId = traceId
             });
         }
+    }
+
+    /// <summary>
+    ///  Valida que las monedas estén soportadas
+    /// </summary>
+    private static (bool IsValid, string ErrorMessage) ValidateCurrencies(string sourceCurrency, string targetCurrency)
+    {
+        var invalidCurrencies = new List<string>();
+
+        if (!SupportedCurrencies.Contains(sourceCurrency))
+        {
+            invalidCurrencies.Add($"Source currency '{sourceCurrency}' is not supported");
+        }
+
+        if (!SupportedCurrencies.Contains(targetCurrency))
+        {
+            invalidCurrencies.Add($"Target currency '{targetCurrency}' is not supported");
+        }
+
+        if (invalidCurrencies.Any())
+        {
+            var supportedList = string.Join(", ", SupportedCurrencies.OrderBy(x => x));
+            var errorMessage = string.Join(". ", invalidCurrencies) + $". Supported currencies: {supportedList}";
+            return (false, errorMessage);
+        }
+
+        return (true, string.Empty);
     }
 
     /// <summary>
@@ -285,29 +338,40 @@ public class ExchangeRateController : ControllerBase
     [ProducesResponseType(typeof(SupportedCurrenciesDto), StatusCodes.Status200OK)]
     public ActionResult<SupportedCurrenciesDto> GetSupportedCurrencies()
     {
+        // Usar la lista de monedas soportadas reales
         var currencies = new SupportedCurrenciesDto
         {
-            Currencies = new List<CurrencyDto>
+            Currencies = SupportedCurrencies.OrderBy(code => code).Select(code => new CurrencyDto
             {
-                new() { Code = "USD", Name = "US Dollar", Symbol = "$", Country = "United States" },
-                new() { Code = "EUR", Name = "Euro", Symbol = "€", Country = "European Union" },
-                new() { Code = "GBP", Name = "British Pound", Symbol = "£", Country = "United Kingdom" },
-                new() { Code = "JPY", Name = "Japanese Yen", Symbol = "¥", Country = "Japan" },
-                new() { Code = "CHF", Name = "Swiss Franc", Symbol = "CHF", Country = "Switzerland" },
-                new() { Code = "CAD", Name = "Canadian Dollar", Symbol = "C$", Country = "Canada" },
-                new() { Code = "AUD", Name = "Australian Dollar", Symbol = "A$", Country = "Australia" },
-                new() { Code = "NZD", Name = "New Zealand Dollar", Symbol = "NZ$", Country = "New Zealand" },
-                new() { Code = "SEK", Name = "Swedish Krona", Symbol = "kr", Country = "Sweden" },
-                new() { Code = "NOK", Name = "Norwegian Krone", Symbol = "kr", Country = "Norway" },
-                new() { Code = "DKK", Name = "Danish Krone", Symbol = "kr", Country = "Denmark" },
-                new() { Code = "PLN", Name = "Polish Złoty", Symbol = "zł", Country = "Poland" },
-                new() { Code = "CZK", Name = "Czech Koruna", Symbol = "Kč", Country = "Czech Republic" },
-                new() { Code = "HUF", Name = "Hungarian Forint", Symbol = "Ft", Country = "Hungary" }
-            }
+                Code = code,
+                Name = GetCurrencyName(code),
+            }).ToList()
         };
 
         return Ok(currencies);
     }
+
+    /// <summary>
+    ///  Obtiene el nombre de la moneda
+    /// </summary>
+    private static string GetCurrencyName(string code) => code switch
+    {
+        "USD" => "US Dollar",
+        "EUR" => "Euro", 
+        "GBP" => "British Pound",
+        "JPY" => "Japanese Yen",
+        "CHF" => "Swiss Franc",
+        "CAD" => "Canadian Dollar",
+        "AUD" => "Australian Dollar",
+        "NZD" => "New Zealand Dollar",
+        "SEK" => "Swedish Krona",
+        "NOK" => "Norwegian Krone",
+        "DKK" => "Danish Krone",
+        "PLN" => "Polish Złoty",
+        "CZK" => "Czech Koruna",
+        "HUF" => "Hungarian Forint",
+        _ => $"{code} Currency"
+    };
 
     /// <summary>
     /// Obtiene información general de la API
