@@ -1,0 +1,42 @@
+# Compilación
+bin/
+obj/
+
+# Archivos de usuario y configuración
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+*.editorconfig
+
+# Archivos de dependencias
+packages/
+!packages/repositories.config
+
+# Configuración de entorno y secretos
+.env
+secrets.json
+
+# Archivos de lock y logs
+project.lock.json
+project.assets.json
+logs/
+*.log
+
+# Archivos de publicación y despliegue
+publish/
+wwwroot/
+
+# Archivos de caché y temporales
+*.pid
+*.cache
+
+# Configuración de Rider y ReSharper
+.idea/
+*.DotSettings.user
+
+# Certificados de desarrollo
+*.pfx
+*.p12
