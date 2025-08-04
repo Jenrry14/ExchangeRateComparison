@@ -1,9 +1,12 @@
 // MockApis/Controllers/MockApi2Controller.cs
 
+using System.Diagnostics.CodeAnalysis;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExchangeRateComparison.api.MockApis.Controllers;
+[ExcludeFromCodeCoverage]
+
 
 /// <summary>
 /// Mock API2 - Simula API externa con formato XML
@@ -17,7 +20,7 @@ public class MockApi2Controller : ControllerBase
     private readonly ILogger<MockApi2Controller> _logger;
     private static readonly Dictionary<string, decimal> MockRates = new()
     {
-        ["USD-EUR"] = 0.87m, // Ligeramente diferentes para comparación
+        ["USD-EUR"] = 0.87m, 
         ["USD-GBP"] = 0.76m,
         ["USD-JPY"] = 111.50m,
         ["EUR-USD"] = 1.15m,
@@ -44,11 +47,11 @@ public class MockApi2Controller : ControllerBase
     [Produces("application/xml")]
     public async Task<ActionResult> Exchange()
     {
-        // Validar autenticación Bearer
-        if (!ValidateBearerToken())
+        // Validar autenticación API Key (igual que API1)
+        if (!ValidateApiKey())
         {
-            _logger.LogWarning("API2 - Invalid or missing Bearer token");
-            return Unauthorized("<?xml version=\"1.0\"?><XML><error>Invalid Bearer token</error></XML>");
+            _logger.LogWarning("API2 - Invalid or missing API key");
+            return Unauthorized("<?xml version=\"1.0\"?><XML><error>Invalid API key</error></XML>");
         }
 
         // Simular tiempo de procesamiento
@@ -59,6 +62,13 @@ public class MockApi2Controller : ControllerBase
         {
             _logger.LogWarning("API2 simulating temporary failure");
             return StatusCode(500, "<?xml version=\"1.0\"?><XML><error>API2 temporarily unavailable</error></XML>");
+        }
+
+        // Simular rate limiting (2% de probabilidad)
+        if (Random.Shared.NextDouble() < 0.02)
+        {
+            _logger.LogWarning("API2 simulating rate limit");
+            return StatusCode(429, "<?xml version=\"1.0\"?><XML><error>Rate limit exceeded</error><retryAfter>60</retryAfter></XML>");
         }
 
         try
@@ -103,17 +113,16 @@ public class MockApi2Controller : ControllerBase
         return Ok(new { status = "healthy", api = "MockAPI2", timestamp = DateTime.UtcNow });
     }
 
-    private bool ValidateBearerToken()
+    private bool ValidateApiKey()
     {
-        var authHeader = Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
+        if (!Request.Headers.TryGetValue("X-API-Key", out var apiKey))
         {
             return false;
         }
 
-        var token = authHeader.Substring(7);
-        var validTokens = new[] { "demo-bearer-token", "test-bearer-token", "valid-token-2" };
-        return validTokens.Contains(token);
+        // Simular validación de API keys válidas para API2
+        var validKeys = new[] { "demo-api-key-2", "test-api-key-2", "valid-key-2" };
+        return validKeys.Contains(apiKey.ToString());
     }
 
     private static decimal GetRate(string from, string to)

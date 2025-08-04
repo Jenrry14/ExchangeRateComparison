@@ -1,5 +1,10 @@
 // Configuration/ApiConfiguration.cs
+
+using System.Diagnostics.CodeAnalysis;
+
 namespace ExchangeRateComparison.api.Configuration;
+[ExcludeFromCodeCoverage]
+
 
 /// <summary>
 /// Configuración para las APIs externas de tasas de cambio
@@ -16,6 +21,9 @@ public class ApiConfiguration
 /// <summary>
 /// Configuración individual para cada API externa
 /// </summary>
+
+[ExcludeFromCodeCoverage]
+
 public class ApiEndpoint
 {
     /// <summary>

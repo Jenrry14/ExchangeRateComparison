@@ -24,11 +24,16 @@ namespace ExchangeRateComparison.api.Controllers;
 public class ExchangeRateController : ControllerBase
 {
     private readonly IExchangeRateService _exchangeRateService;
+    private readonly IDynamicCredentialsService _credentialsService;
     private readonly ILogger<ExchangeRateController> _logger;
 
-    public ExchangeRateController(IExchangeRateService exchangeRateService, ILogger<ExchangeRateController> logger)
+    public ExchangeRateController(
+        IExchangeRateService exchangeRateService, 
+        IDynamicCredentialsService credentialsService,
+        ILogger<ExchangeRateController> logger)
     {
         _exchangeRateService = exchangeRateService;
+        _credentialsService = credentialsService;
         _logger = logger;
     }
 
@@ -40,10 +45,12 @@ public class ExchangeRateController : ControllerBase
     /// <returns>Mejor oferta encontrada con detalles de todas las APIs consultadas</returns>
     /// <response code="200">Mejor tasa de cambio encontrada</response>
     /// <response code="400">Datos de entrada inválidos</response>
+    /// <response code="401">Credenciales de autenticación inválidas o faltantes</response>
     /// <response code="503">Todas las APIs externas fallaron</response>
     [HttpPost("best-rate")]
     [ProducesResponseType(typeof(BestRateResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<BestRateResponseDto>> GetBestRate(
         [FromBody] ExchangeRequestDto requestDto, 
@@ -53,8 +60,28 @@ public class ExchangeRateController : ControllerBase
         
         try
         {
+            // ✅ NUEVO: Leer las API keys de los headers
+            var api1Key = Request.Headers["X-API1-Key"].FirstOrDefault();
+            var api2Key = Request.Headers["X-API2-Key"].FirstOrDefault();
+            var api3Key = Request.Headers["X-API3-Key"].FirstOrDefault();
+
             _logger.LogInformation("Processing exchange rate request: {SourceCurrency} to {TargetCurrency}, amount: {Amount} [TraceId: {TraceId}]",
                 requestDto.SourceCurrency, requestDto.TargetCurrency, requestDto.Amount, traceId);
+
+            _logger.LogDebug("API Keys received - API1: {Api1HasKey}, API2: {Api2HasKey}, API3: {Api3HasKey} [TraceId: {TraceId}]",
+                !string.IsNullOrEmpty(api1Key), !string.IsNullOrEmpty(api2Key), !string.IsNullOrEmpty(api3Key), traceId);
+
+            // ✅ NUEVO: Validar que al menos una API key esté presente
+            if (string.IsNullOrEmpty(api1Key) && string.IsNullOrEmpty(api2Key) && string.IsNullOrEmpty(api3Key))
+            {
+                _logger.LogWarning("No API keys provided in headers [TraceId: {TraceId}]", traceId);
+                return Unauthorized(new ErrorResponseDto
+                {
+                    Error = "Authentication required",
+                    Details = "At least one API key must be provided via headers (X-API1-Key, X-API2-Key, or X-API3-Key)",
+                    TraceId = traceId
+                });
+            }
 
             // Validar entrada
             if (!ModelState.IsValid)
@@ -84,6 +111,14 @@ public class ExchangeRateController : ControllerBase
                     TraceId = traceId
                 });
             }
+
+            // ✅ NUEVO: Configurar credenciales dinámicamente
+            await _credentialsService.ConfigureApiCredentialsAsync(api1Key, api2Key, api3Key);
+
+            // ✅ NUEVO: Almacenar credenciales en HttpContext para que los clientes las puedan leer
+            HttpContext.Items["API1_KEY"] = api1Key;
+            HttpContext.Items["API2_KEY"] = api2Key;
+            HttpContext.Items["API3_KEY"] = api3Key;
 
             // Crear solicitud de dominio
             var request = new ExchangeRequest(requestDto.SourceCurrency, requestDto.TargetCurrency, requestDto.Amount);

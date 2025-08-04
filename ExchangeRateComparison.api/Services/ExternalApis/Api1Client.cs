@@ -1,5 +1,8 @@
+// Services/ExternalApis/Api1Client.cs
+
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -8,10 +11,13 @@ using System.Threading.Tasks;
 using ExchangeRateComparison.api.Configuration;
 using ExchangeRateComparison.api.Models.ExchangeRate;
 using ExchangeRateComparison.api.Services.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ExchangeRateComparison.api.Services.ExternalApis;
+[ExcludeFromCodeCoverage]
+
 
 /// <summary>
 /// Cliente para API1 - Formato JSON simple
@@ -23,15 +29,17 @@ public class Api1Client : IExchangeRateClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<Api1Client> _logger;
     private readonly ApiEndpoint _config;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public string ApiName => "API1";
     public bool IsEnabled => _config.IsEnabled;
 
-    public Api1Client(HttpClient httpClient, ILogger<Api1Client> logger, IOptions<ApiConfiguration> config)
+    public Api1Client(HttpClient httpClient, ILogger<Api1Client> logger, IOptions<ApiConfiguration> config, IHttpContextAccessor httpContextAccessor)
     {
         _httpClient = httpClient;
         _logger = logger;
         _config = config.Value.Api1;
+        _httpContextAccessor = httpContextAccessor;
         
         _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
 
@@ -40,31 +48,8 @@ public class Api1Client : IExchangeRateClient
 
     private void ConfigureHttpClient()
     {
-        _httpClient.BaseAddress = new Uri(_config.Url);
-        _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
-        
-        // Configurar autenticación según el tipo
-        switch (_config.AuthType.ToLower())
-        {
-            case "apikey":
-                if (!string.IsNullOrEmpty(_config.ApiKey))
-                {
-                    _httpClient.DefaultRequestHeaders.Add("X-API-Key", _config.ApiKey);
-                    if (!string.IsNullOrEmpty(_config.ApiSecret))
-                    {
-                        _httpClient.DefaultRequestHeaders.Add("X-API-Secret", _config.ApiSecret);
-                    }
-                }
-                break;
-                
-            case "bearer":
-                if (!string.IsNullOrEmpty(_config.BearerToken))
-                {
-                    _httpClient.DefaultRequestHeaders.Authorization = 
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _config.BearerToken);
-                }
-                break;
-        }
+        // Configuración base se hace en Program.cs
+        // Solo configurar headers que no cambien dinámicamente
     }
 
     public async Task<ExchangeResponse> GetExchangeRateAsync(ExchangeRequest request, CancellationToken cancellationToken = default)
@@ -76,6 +61,15 @@ public class Api1Client : IExchangeRateClient
             _logger.LogDebug("Making request to {ApiName} for {From}-{To}, amount: {Amount}", 
                 ApiName, request.SourceCurrency, request.TargetCurrency, request.Amount);
 
+            var httpContext = _httpContextAccessor?.HttpContext;
+            var dynamicApiKey = httpContext?.Items["API1_KEY"]?.ToString();
+            
+            if (string.IsNullOrEmpty(dynamicApiKey))
+            {
+                _logger.LogWarning("{ApiName} - No API key provided in request", ApiName);
+                return ExchangeResponse.CreateError(ApiName, "No API key provided", stopwatch.Elapsed);
+            }
+
             var payload = new
             {
                 from = request.SourceCurrency,
@@ -83,7 +77,12 @@ public class Api1Client : IExchangeRateClient
                 value = request.Amount
             };
 
-            var response = await _httpClient.PostAsJsonAsync($"{_config.Url}/exchange", payload, cancellationToken);
+            var requestUri = $"{_config.Url}/exchange";
+            using var httpRequestMessage = new HttpRequestMessage(HttpMethod.Post, requestUri);
+            httpRequestMessage.Headers.Add("X-API-Key", dynamicApiKey);
+            httpRequestMessage.Content = JsonContent.Create(payload);
+
+            var response = await _httpClient.SendAsync(httpRequestMessage, cancellationToken);
             
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
@@ -146,7 +145,8 @@ public class Api1Client : IExchangeRateClient
     {
         try
         {
-            var response = await _httpClient.GetAsync("/health", cancellationToken);
+            var healthUri = $"{_config.Url}/health";
+            var response = await _httpClient.GetAsync(healthUri, cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch

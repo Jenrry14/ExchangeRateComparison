@@ -1,8 +1,11 @@
 // MockApis/Controllers/MockApi3Controller.cs
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExchangeRateComparison.api.MockApis.Controllers;
+[ExcludeFromCodeCoverage]
+
 
 /// <summary>
 /// Mock API3 - Simula API externa con formato JSON anidado
@@ -41,14 +44,14 @@ public class MockApi3Controller : ControllerBase
     [HttpPost("exchange")]
     public async Task<ActionResult> Exchange([FromBody] Api3Request request)
     {
-        // Validar autenticación Basic
-        if (!ValidateBasicAuth())
+        // Validar autenticación API Key (igual que API1 y API2)
+        if (!ValidateApiKey())
         {
-            _logger.LogWarning("API3 - Invalid or missing Basic authentication");
+            _logger.LogWarning("API3 - Invalid or missing API key");
             return Unauthorized(new 
             { 
                 statusCode = 401, 
-                message = "Invalid Basic authentication", 
+                message = "Invalid API key", 
                 data = (object?)null 
             });
         }
@@ -65,6 +68,19 @@ public class MockApi3Controller : ControllerBase
                 statusCode = 500, 
                 message = "API3 temporarily unavailable", 
                 data = (object?)null 
+            });
+        }
+
+        // Simular rate limiting (2% de probabilidad)
+        if (Random.Shared.NextDouble() < 0.02)
+        {
+            _logger.LogWarning("API3 simulating rate limit");
+            return StatusCode(429, new 
+            { 
+                statusCode = 429, 
+                message = "Rate limit exceeded", 
+                data = (object?)null,
+                retryAfter = 60
             });
         }
 
@@ -110,40 +126,16 @@ public class MockApi3Controller : ControllerBase
         return Ok(new { status = "healthy", api = "MockAPI3", timestamp = DateTime.UtcNow });
     }
 
-    private bool ValidateBasicAuth()
+    private bool ValidateApiKey()
     {
-        var authHeader = Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Basic "))
+        if (!Request.Headers.TryGetValue("X-API-Key", out var apiKey))
         {
             return false;
         }
 
-        try
-        {
-            var base64Credentials = authHeader.Substring(6);
-            var credentials = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(base64Credentials));
-            var parts = credentials.Split(':');
-            
-            if (parts.Length != 2)
-                return false;
-
-            var username = parts[0];
-            var password = parts[1];
-
-            // Simular validación de credenciales
-            var validCredentials = new Dictionary<string, string>
-            {
-                ["demo-username"] = "demo-password",
-                ["test-username"] = "test-password",
-                ["user3"] = "pass3"
-            };
-
-            return validCredentials.ContainsKey(username) && validCredentials[username] == password;
-        }
-        catch
-        {
-            return false;
-        }
+        // Simular validación de API keys válidas para API3
+        var validKeys = new[] { "demo-api-key-3", "test-api-key-3", "valid-key-3" };
+        return validKeys.Contains(apiKey.ToString());
     }
 
     private static decimal GetRate(string from, string to)

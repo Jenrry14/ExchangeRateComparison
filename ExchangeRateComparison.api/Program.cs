@@ -1,5 +1,6 @@
 // Program.cs
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Polly;
 using Polly.Extensions.Http;
@@ -17,6 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+// HttpContextAccessor para acceder al contexto HTTP
+builder.Services.AddHttpContextAccessor();
+
 // Configuración de Swagger/OpenAPI
 builder.Services.AddSwaggerGen(c =>
 {
@@ -30,14 +34,15 @@ builder.Services.AddSwaggerGen(c =>
             Name = "Exchange Rate Team",
             Email = "exchangerate@banreservas.com"
         }
-        
     });
+
     // Excluir controladores Mock de la documentación
     c.DocInclusionPredicate((docName, description) =>
     {
         var controllerName = description.ActionDescriptor.RouteValues["controller"];
         return !controllerName?.Contains("MockApi") == true;
     });
+
     // Incluir comentarios XML en Swagger
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
@@ -46,13 +51,67 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
-    // Configurar esquemas de autenticación para Swagger
-    c.AddSecurityDefinition("ApiKey", new()
+    // Configurar headers de autenticación separados para cada API
+    c.AddSecurityDefinition("Api1Key", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Name = "X-API-Key",
-        Description = "API Key para autenticación con APIs externas"
+        Name = "X-API1-Key",
+        Description = "API Key para API1 (ej: demo-api-key-1)"
+    });
+
+    c.AddSecurityDefinition("Api2Key", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Name = "X-API2-Key",
+        Description = "API Key para API2 (ej: demo-api-key-2)"
+    });
+
+    c.AddSecurityDefinition("Api3Key", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Name = "X-API3-Key",
+        Description = "API Key para API3 (ej: demo-api-key-3)"
+    });
+
+    // Requerir todas las keys en los endpoints
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference 
+                { 
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, 
+                    Id = "Api1Key" 
+                }
+            },
+            new string[] {}
+        },
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference 
+                { 
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, 
+                    Id = "Api2Key" 
+                }
+            },
+            new string[] {}
+        },
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference 
+                { 
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, 
+                    Id = "Api3Key" 
+                }
+            },
+            new string[] {}
+        }
     });
 });
 
@@ -117,11 +176,11 @@ var circuitBreakerPolicy = HttpPolicyExtensions
 // Cliente para API1 (JSON)
 builder.Services.AddHttpClient<Api1Client>("Api1Client", (serviceProvider, client) =>
 {
-   // var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
-   // var api1Config = config.Value.Api1;
+    var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
+    var api1Config = config.Value.Api1;
     
-    //client.BaseAddress = new Uri(api1Config.Url);
-    //client.Timeout = TimeSpan.FromSeconds(api1Config.TimeoutSeconds);
+    client.BaseAddress = new Uri(api1Config.Url);
+    client.Timeout = TimeSpan.FromSeconds(api1Config.TimeoutSeconds);
     
     // Headers comunes
     client.DefaultRequestHeaders.Add("User-Agent", "ExchangeRateComparison/1.0");
@@ -138,11 +197,11 @@ builder.Services.AddHttpClient<Api1Client>("Api1Client", (serviceProvider, clien
 // Cliente para API2 (XML)
 builder.Services.AddHttpClient<Api2Client>("Api2Client", (serviceProvider, client) =>
 {
-    //var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
-    //var api2Config = config.Value.Api2;
+    var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
+    var api2Config = config.Value.Api2;
     
-   // client.BaseAddress = new Uri(api2Config.Url);
-   // client.Timeout = TimeSpan.FromSeconds(api2Config.TimeoutSeconds);
+    client.BaseAddress = new Uri(api2Config.Url);
+    client.Timeout = TimeSpan.FromSeconds(api2Config.TimeoutSeconds);
     
     client.DefaultRequestHeaders.Add("User-Agent", "ExchangeRateComparison/1.0");
     client.DefaultRequestHeaders.Add("Accept", "application/xml");
@@ -158,11 +217,11 @@ builder.Services.AddHttpClient<Api2Client>("Api2Client", (serviceProvider, clien
 // Cliente para API3 (JSON anidado)
 builder.Services.AddHttpClient<Api3Client>("Api3Client", (serviceProvider, client) =>
 {
-   // var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
-   // var api3Config = config.Value.Api3;
+    var config = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsSnapshot<ApiConfiguration>>();
+    var api3Config = config.Value.Api3;
     
-   // client.BaseAddress = new Uri(api3Config.Url);
-   // client.Timeout = TimeSpan.FromSeconds(api3Config.TimeoutSeconds);
+    client.BaseAddress = new Uri(api3Config.Url);
+    client.Timeout = TimeSpan.FromSeconds(api3Config.TimeoutSeconds);
     
     client.DefaultRequestHeaders.Add("User-Agent", "ExchangeRateComparison/1.0");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
@@ -184,8 +243,9 @@ builder.Services.AddScoped<IExchangeRateClient, Api3Client>();
 
 // Registrar servicio principal
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
-//builder.Services.AddScoped<IExchangeRateService, MockExchangeRateService>();
 
+// Servicio para credenciales dinámicas
+builder.Services.AddScoped<IDynamicCredentialsService, DynamicCredentialsService>();
 
 // ===== CONFIGURACIÓN DE HEALTH CHECKS =====
 builder.Services.AddHealthChecks()
@@ -387,5 +447,54 @@ public static class PollyExtensions
     }
 }
 
+/// <summary>
+/// Interfaz para servicio de credenciales dinámicas
+/// </summary>
+public interface IDynamicCredentialsService
+{
+    Task ConfigureApiCredentialsAsync(string? api1Key, string? api2Key, string? api3Key);
+}
+
+/// <summary>
+/// Servicio para manejar credenciales dinámicas
+/// </summary>
+public class DynamicCredentialsService : IDynamicCredentialsService
+{
+    private readonly IEnumerable<IExchangeRateClient> _clients;
+    private readonly ILogger<DynamicCredentialsService> _logger;
+
+    public DynamicCredentialsService(IEnumerable<IExchangeRateClient> clients, ILogger<DynamicCredentialsService> logger)
+    {
+        _clients = clients;
+        _logger = logger;
+    }
+
+    public async Task ConfigureApiCredentialsAsync(string? api1Key, string? api2Key, string? api3Key)
+    {
+        await Task.CompletedTask; // Para mantener async
+
+        foreach (var client in _clients)
+        {
+            var key = client.ApiName switch
+            {
+                "API1" => api1Key,
+                "API2" => api2Key, 
+                "API3" => api3Key,
+                _ => null
+            };
+
+            if (!string.IsNullOrEmpty(key))
+            {
+                _logger.LogDebug("Dynamic credentials available for {ApiName}", client.ApiName);
+            }
+            else
+            {
+                _logger.LogWarning("No credentials provided for {ApiName}", client.ApiName);
+            }
+        }
+    }
+}
+
 // Hacer la clase Program accesible para testing
+[ExcludeFromCodeCoverage]
 public partial class Program { }

@@ -2,11 +2,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 namespace ExchangeRateComparison.api.MockApis.Controllers;
+[ExcludeFromCodeCoverage]
+
 
 /// <summary>
 /// Mock API1 - Simula API externa con formato JSON simple
