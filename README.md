@@ -1,6 +1,6 @@
 # 🏦 Exchange Rate Comparison API
 
-Una API  para comparar tasas de cambio de múltiples API y obtener la mejor oferta para clientes.
+ API para comparar tasas de cambio  y obtener la mejor oferta para clientes.
 
 ## 📋 Características
 
@@ -57,7 +57,7 @@ cd ExchangeRateComparison
 docker-compose up --build
 
 # 4. La aplicación estará disponible en:
-# http://localhost:5055
+# http://localhost:5055/index.html  (Swagger UI)
 ```
 
 **💡 Comandos Docker útiles:**
@@ -83,7 +83,7 @@ dotnet restore
 dotnet run --project ExchangeRateComparison.api
 
 # La aplicación estará disponible en:
-# https://localhost:5055 (o el puerto mostrado en consola)
+# http://localhost:5055/index.html 
 ```
 
 ## 🔐 Autenticación
@@ -143,18 +143,16 @@ Headers:
 ### 💱 Ejemplo de Request
 
 ```json
-POST /api/exchangerate/best-rate
-Headers:
-  X-API1-Key: demo-api-key-1
-  X-API2-Key: demo-api-key-2  
-  X-API3-Key: demo-api-key-3
-  Content-Type: application/json
-
-{
-  "sourceCurrency": "USD",
-  "targetCurrency": "EUR",
-  "amount": 100
-}
+curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
+--header 'Content-Type: application/json' \
+--header 'X-API1-Key: demo-api-key-1' \
+--header 'X-API2-Key: demo-api-key-2' \
+--header 'X-API3-Key: demo-api-key-3' \
+--data '{
+    "sourceCurrency": "USD",
+    "targetCurrency": "EUR", 
+    "amount": 100
+  }'
 ```
 
 ### 📈 Ejemplo de Response
@@ -203,47 +201,30 @@ Headers:
 ### Health Check
 
 ```bash
-curl http://localhost:5055/health  
+curl http://localhost:5055/health
 ```
 
 ### Test directo de Mock APIs
 
 ```bash
 # API1 (JSON)
-curl -X POST http://localhost:5055/api1/exchange \  
+curl -X POST http://localhost:5055/api1/exchange \
   -H "Content-Type: application/json" \
   -H "X-API-Key: demo-api-key-1" \
   -d '{"from": "USD", "to": "EUR", "value": 100}'
 
 # API2 (XML)  
-curl -X POST http://localhost:5055/api2/exchange \  
+curl -X POST http://localhost:5055/api2/exchange \
   -H "Content-Type: application/xml" \
   -H "X-API-Key: demo-api-key-2" \
   -d '<XML><From>USD</From><To>EUR</To><Amount>100</Amount></XML>'
 
 # API3 (JSON Anidado)
-curl -X POST http://localhost:5055/api3/exchange \ 
+curl -X POST http://localhost:5055/api3/exchange \
   -H "Content-Type: application/json" \
   -H "X-API-Key: demo-api-key-3" \
   -d '{"exchange": {"sourceCurrency": "USD", "targetCurrency": "EUR", "quantity": 100}}'
 ```
-
-## 📊 Monitoreo
-
-### Estadísticas disponibles:
-
-- **Total de requests** procesados
-- **Tasa de éxito** por API
-- **Tiempo promedio de respuesta**
-- **Conteo de mejores ofertas** por API
-- **Uptime** del servicio
-
-### Health checks:
-
-- ✅ Estado del servicio principal
-- ✅ Conectividad con APIs externas
-- ✅ Tiempo de respuesta promedio
-- ✅ Última respuesta exitosa
 
 ## 🏗️ Arquitectura Técnica
 
@@ -254,26 +235,8 @@ curl -X POST http://localhost:5055/api3/exchange \
 - **Polly** - Políticas de resilencia (retry, circuit breaker)
 - **Swagger/OpenAPI** - Documentación
 - **Docker** - Containerización
-- **Serilog** - Logging estructurado
+- **HttpClient** - Comunicación con APIs externas
 
-### Patrones implementados:
-
-- **🎯 Strategy Pattern** - Clientes intercambiables de APIs
-- **🔄 Circuit Breaker** - Protección contra fallos en cascada  
-- **⚡ Retry Pattern** - Reintentos automáticos con backoff
-- **📊 Observer Pattern** - Estadísticas y monitoreo
-- **🧩 Dependency Injection** - Inversión de control
-
-## 🐛 Troubleshooting
-
-### Problema: "Request timeout"
-```bash
-# Verificar URLs en configuración
-curl http://localhost:8080/api1/health
-
-# Aumentar timeout en docker-compose.yml
-ExchangeRateApis__Api1__TimeoutSeconds=30
-```
 
 ### Problema: "Authentication failed"
 ```bash
@@ -286,29 +249,26 @@ ExchangeRateApis__Api1__TimeoutSeconds=30
 ### Problema: "All APIs failed"
 ```bash
 # Verificar health check
-curl http://localhost:8080/api/exchangerate/health
+curl http://localhost:5055/api/exchangerate/health
 
 # Ver logs del contenedor
 docker logs exchange-rate-api
 ```
 
-## 🤝 Contribuir
+### Problema: "Swagger no se abre"
+```bash
+# Usar la URL completa
+http://localhost:5055/index.html
 
-1. Fork el proyecto
-2. Crea tu feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push al branch (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+# Verificar que Docker esté corriendo
+docker ps
+```
 
-## 📄 Licencia
+### Problema: "Authentication failed"
+```bash
+# Verificar API keys en headers
+# API1: demo-api-key-1, test-api-key-1, valid-key-1
+# API2: demo-api-key-2, test-api-key-2, valid-key-2  
+# API3: demo-api-key-3, test-api-key-3, valid-key-3
+```
 
-Este proyecto está bajo la licencia MIT. Ver `LICENSE` para más detalles.
-
-## 👥 Contacto
-
-**Exchange Rate Team**  
-📧 Email: exchangerate@banreservas.com
-
----
-
-⭐ **¡Dale una estrella si este proyecto te ayudó!** ⭐
