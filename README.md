@@ -107,18 +107,16 @@ La API utiliza **autenticación dinámica por headers**. En Swagger UI:
 Si envías API Keys incorrectas:
 
 ```json
-POST /api/exchangerate/best-rate
-Headers:
-  X-API1-Key: clave-incorrecta
-  X-API2-Key: invalid-key  
-  X-API3-Key: wrong-key
-  Content-Type: application/json
-
-{
-  "sourceCurrency": "USD",
-  "targetCurrency": "EUR",
-  "amount": 100
-}
+curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
+--header 'Content-Type: application/json' \
+--header 'X-API1-Key: key' \
+--header 'X-API2-Key: key' \
+--header 'X-API3-Key: key' \
+--data '{
+    "sourceCurrency": "USD",
+    "targetCurrency": "EUR", 
+    "amount": 100
+  }'
 ```
 
 **Response (503 Service Unavailable):**
