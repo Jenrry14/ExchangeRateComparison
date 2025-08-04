@@ -18,7 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// HttpContextAccessor para acceder al contexto HTTP
+// ✅ AGREGAR: HttpContextAccessor para acceder al contexto HTTP
 builder.Services.AddHttpContextAccessor();
 
 // Configuración de Swagger/OpenAPI
@@ -51,7 +51,7 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
-    // Configurar headers de autenticación separados para cada API
+    // ✅ NUEVO: Configurar headers de autenticación separados para cada API
     c.AddSecurityDefinition("Api1Key", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -76,7 +76,7 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API Key para API3 (ej: demo-api-key-3)"
     });
 
-    // Requerir todas las keys en los endpoints
+    // ✅ NUEVO: Requerir todas las keys en los endpoints
     c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
         {
@@ -244,7 +244,7 @@ builder.Services.AddScoped<IExchangeRateClient, Api3Client>();
 // Registrar servicio principal
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 
-// Servicio para credenciales dinámicas
+// ✅ NUEVO: Servicio para credenciales dinámicas
 builder.Services.AddScoped<IDynamicCredentialsService, DynamicCredentialsService>();
 
 // ===== CONFIGURACIÓN DE HEALTH CHECKS =====
@@ -277,17 +277,19 @@ var app = builder.Build();
 
 // ===== CONFIGURACIÓN DEL PIPELINE DE MIDDLEWARE =====
 
-// Swagger solo en desarrollo
-if (app.Environment.IsDevelopment())
+// Swagger en todos los entornos (para testing y producción)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Exchange Rate Comparison API V1");
-        c.RoutePrefix = string.Empty; // Swagger en la raíz
-        c.DocumentTitle = "Exchange Rate API - Banreservas";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Exchange Rate Comparison API V1");
+    c.RoutePrefix = string.Empty; // Swagger en la raíz
+    c.DocumentTitle = "Exchange Rate API - Banreservas";
+    c.DefaultModelsExpandDepth(-1); // Colapsar modelos por defecto
+    c.DefaultModelRendering(Swashbuckle.AspNetCore.SwaggerUI.ModelRendering.Model);
+});
+
+// ✅ NUEVO: Redirigir raíz a Swagger si no está funcionando
+app.MapGet("/", () => Results.Redirect("/index.html")).ExcludeFromDescription();
 
 // Middleware de manejo de errores
 if (app.Environment.IsDevelopment())
@@ -320,14 +322,14 @@ app.MapControllers();
 
 // ===== ENDPOINTS ADICIONALES =====
 
-// Endpoint de información de la API
-app.MapGet("/", () => new
+// ✅ ACTUALIZADO: Endpoint de información de la API (cambiar ruta para no conflicto)
+app.MapGet("/api-info", () => new
 {
     Service = "Exchange Rate Comparison API",
     Version = "1.0.0",
     Environment = app.Environment.EnvironmentName,
     Timestamp = DateTime.UtcNow,
-    Documentation = app.Environment.IsDevelopment() ? "/" : "/swagger",
+    Documentation = "/index.html", // ✅ Actualizar a la URL que funciona
     Health = "/health",
     Endpoints = new
     {

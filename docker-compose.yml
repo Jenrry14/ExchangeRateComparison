@@ -5,14 +5,14 @@ services:
     build: .
     container_name: exchange-rate-api
     ports:
-      - "5055:5055"  # ✅ Cambiar a puerto 5055
+      - "5055:5055"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:5055  # ✅ Cambiar a puerto 5055
+      - ASPNETCORE_ENVIRONMENT=Development  # ✅ Cambiar a Development para habilitar Swagger
+      - ASPNETCORE_URLS=http://+:5055
       # URLs de APIs internas (dentro del contenedor)
-      - ExchangeRateApis__Api1__Url=http://localhost:5055/api1  # ✅ Puerto 5055
-      - ExchangeRateApis__Api2__Url=http://localhost:5055/api2  # ✅ Puerto 5055
-      - ExchangeRateApis__Api3__Url=http://localhost:5055/api3  # ✅ Puerto 5055
+      - ExchangeRateApis__Api1__Url=http://localhost:5055/api1
+      - ExchangeRateApis__Api2__Url=http://localhost:5055/api2
+      - ExchangeRateApis__Api3__Url=http://localhost:5055/api3
       - ExchangeRateApis__Api1__TimeoutSeconds=10
       - ExchangeRateApis__Api2__TimeoutSeconds=15
       - ExchangeRateApis__Api3__TimeoutSeconds=12
@@ -23,7 +23,7 @@ services:
       - ExchangeRateApis__Api2__IsEnabled=true
       - ExchangeRateApis__Api3__IsEnabled=true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5055/health"]  # ✅ Puerto 5055
+      test: ["CMD", "curl", "-f", "http://localhost:5055/health"]
       interval: 30s
       timeout: 10s
       retries: 3
