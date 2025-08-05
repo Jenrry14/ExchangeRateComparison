@@ -236,6 +236,9 @@ builder.Services.AddHttpClient<Api3Client>("Api3Client", (serviceProvider, clien
 
 // ===== REGISTRO DE SERVICIOS DE DOMINIO =====
 
+// ✅ NUEVO: Registrar servicio de configuración dinámica de APIs
+builder.Services.AddSingleton<IApiConfigurationService, ApiConfigurationService>();
+
 // Registrar clientes de APIs externas
 builder.Services.AddScoped<IExchangeRateClient, Api1Client>();
 builder.Services.AddScoped<IExchangeRateClient, Api2Client>();
@@ -337,7 +340,12 @@ app.MapGet("/api-info", () => new
         Health = "GET /api/exchangerate/health",
         Statistics = "GET /api/exchangerate/statistics",
         Currencies = "GET /api/exchangerate/currencies",
-        Info = "GET /api/exchangerate/info"
+        Info = "GET /api/exchangerate/info",
+        // ✅ NUEVO: Endpoints de administración
+        ApiStatus = "GET /api/admin/apis/status",
+        ToggleApi = "PUT /api/admin/apis/{apiName}/toggle",
+        BulkToggleApis = "PUT /api/admin/apis/bulk-toggle",
+        ResetStatistics = "POST /api/admin/statistics/reset"
     }
 }).WithName("GetApiInfo").WithTags("Information");
 
@@ -361,6 +369,9 @@ app.Lifetime.ApplicationStarted.Register(() =>
     var config = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiConfiguration>>();
     logger.LogInformation("APIs configured: API1={Api1Enabled}, API2={Api2Enabled}, API3={Api3Enabled}",
         config.Value.Api1.IsEnabled, config.Value.Api2.IsEnabled, config.Value.Api3.IsEnabled);
+    
+    // ✅ NUEVO: Log de configuración dinámica disponible
+    logger.LogInformation("Dynamic API configuration service enabled - APIs can be toggled via /api/admin endpoints");
 });
 
 // Log de cierre de la aplicación

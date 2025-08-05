@@ -18,7 +18,6 @@ using System.Text.Json;
 namespace ExchangeRateComparison.api.Services.ExternalApis;
 [ExcludeFromCodeCoverage]
 
-
 /// <summary>
 /// Cliente para API3 - Formato JSON anidado
 /// Input: {exchange: {sourceCurrency, targetCurrency, quantity}}
@@ -30,16 +29,25 @@ public class Api3Client : IExchangeRateClient
     private readonly ILogger<Api3Client> _logger;
     private readonly ApiEndpoint _config;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IApiConfigurationService _apiConfigService;
 
     public string ApiName => "API3";
-    public bool IsEnabled => _config.IsEnabled;
+    
+    // ← MODIFICADO: Usa el servicio de configuración dinámica
+    public bool IsEnabled => _apiConfigService.IsApiEnabled(ApiName);
 
-    public Api3Client(HttpClient httpClient, ILogger<Api3Client> logger, IOptions<ApiConfiguration> config, IHttpContextAccessor httpContextAccessor)
+    public Api3Client(
+        HttpClient httpClient, 
+        ILogger<Api3Client> logger, 
+        IOptions<ApiConfiguration> config, 
+        IHttpContextAccessor httpContextAccessor,
+        IApiConfigurationService apiConfigService)
     {
         _httpClient = httpClient;
         _logger = logger;
         _config = config.Value.Api3;
         _httpContextAccessor = httpContextAccessor;
+        _apiConfigService = apiConfigService;
         _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
 
         ConfigureHttpClient();
@@ -57,6 +65,12 @@ public class Api3Client : IExchangeRateClient
         
         try
         {
+            if (!IsEnabled)
+            {
+                _logger.LogWarning("{ApiName} is currently disabled", ApiName);
+                return ExchangeResponse.CreateError(ApiName, "API is currently disabled", stopwatch.Elapsed);
+            }
+
             _logger.LogDebug("Making nested JSON request to {ApiName} for {From}-{To}", 
                 ApiName, request.SourceCurrency, request.TargetCurrency);
 

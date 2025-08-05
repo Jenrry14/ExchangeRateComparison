@@ -18,7 +18,6 @@ using Microsoft.Extensions.Options;
 namespace ExchangeRateComparison.api.Services.ExternalApis;
 [ExcludeFromCodeCoverage]
 
-
 /// <summary>
 /// Cliente para API1 - Formato JSON simple
 /// Input: {from, to, value}
@@ -30,16 +29,25 @@ public class Api1Client : IExchangeRateClient
     private readonly ILogger<Api1Client> _logger;
     private readonly ApiEndpoint _config;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IApiConfigurationService _apiConfigService;
 
     public string ApiName => "API1";
-    public bool IsEnabled => _config.IsEnabled;
+    
+    // ← MODIFICADO: Usa el servicio de configuración dinámica
+    public bool IsEnabled => _apiConfigService.IsApiEnabled(ApiName);
 
-    public Api1Client(HttpClient httpClient, ILogger<Api1Client> logger, IOptions<ApiConfiguration> config, IHttpContextAccessor httpContextAccessor)
+    public Api1Client(
+        HttpClient httpClient, 
+        ILogger<Api1Client> logger, 
+        IOptions<ApiConfiguration> config, 
+        IHttpContextAccessor httpContextAccessor,
+        IApiConfigurationService apiConfigService)
     {
         _httpClient = httpClient;
         _logger = logger;
         _config = config.Value.Api1;
         _httpContextAccessor = httpContextAccessor;
+        _apiConfigService = apiConfigService;
         
         _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
 
@@ -58,6 +66,12 @@ public class Api1Client : IExchangeRateClient
         
         try
         {
+            if (!IsEnabled)
+            {
+                _logger.LogWarning("{ApiName} is currently disabled", ApiName);
+                return ExchangeResponse.CreateError(ApiName, "API is currently disabled", stopwatch.Elapsed);
+            }
+
             _logger.LogDebug("Making request to {ApiName} for {From}-{To}, amount: {Amount}", 
                 ApiName, request.SourceCurrency, request.TargetCurrency, request.Amount);
 
