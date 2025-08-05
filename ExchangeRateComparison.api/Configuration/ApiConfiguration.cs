@@ -37,16 +37,6 @@ public class ApiEndpoint
     public string ApiKey { get; set; } = string.Empty;
     
     /// <summary>
-    /// Secreto de API (usado como password en Basic Auth)
-    /// </summary>
-    public string? ApiSecret { get; set; }
-    
-    /// <summary>
-    /// Token Bearer para autenticación
-    /// </summary>
-    public string? BearerToken { get; set; }
-    
-    /// <summary>
     /// Tipo de autenticación: ApiKey, Bearer, Basic
     /// </summary>
     public string AuthType { get; set; } = "ApiKey";

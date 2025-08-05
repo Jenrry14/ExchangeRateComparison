@@ -134,15 +134,7 @@ public class MockApi2Controller : ControllerBase
             var variation = (decimal)(Random.Shared.NextDouble() * 0.03 - 0.015); // ±1.5%
             return Math.Max(0.0001m, rate * (1 + variation));
         }
-
-        var reverseKey = $"{to.ToUpper()}-{from.ToUpper()}";
-        if (MockRates.TryGetValue(reverseKey, out var reverseRate))
-        {
-            var invertedRate = 1 / reverseRate;
-            var variation = (decimal)(Random.Shared.NextDouble() * 0.03 - 0.015);
-            return Math.Max(0.0001m, invertedRate * (1 + variation));
-        }
-
+        
         return 1m;
     }
 }
