@@ -1,12 +1,13 @@
 # 🏦 Exchange Rate Comparison API
 
- API para comparar tasas de cambio  y obtener la mejor oferta para clientes.
+API para comparar tasas de cambio y obtener la mejor oferta para clientes.
 
 ## 📋 Características
 
 - **🔄 Comparación en tiempo real** de múltiples APIs de tasas de cambio
 - **🚀 Procesamiento paralelo** para máximo rendimiento
 - **🔐 Autenticación dinámica** por headers para cada API
+- **⚙️ Configuración dinámica** - habilitar/deshabilitar APIs desde Swagger
 - **🛡️ Resilencia** con reintentos automáticos y circuit breaker
 - **📊 Estadísticas detalladas** de uso y rendimiento
 - **🏥 Health checks** para monitoreo de APIs externas
@@ -35,6 +36,12 @@
         │ API1 Client │ │ API2 Client │ │ API3 Client │
         │   (JSON)    │ │   (XML)     │ │(JSON Nested)│
         └─────────────┘ └─────────────┘ └─────────────┘
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │ Admin Controller │
+                    │ (Dynamic Config) │
+                    └──────────────────┘
 ```
 
 ## 🚀 Inicio Rápido
@@ -131,6 +138,8 @@ curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
 
 ## 📚 Endpoints Principales
 
+### 💱 Exchange Rate Endpoints
+
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
 | `POST` | `/api/exchangerate/best-rate` | Obtiene la mejor tasa de cambio |
@@ -138,7 +147,137 @@ curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
 | `GET` | `/api/exchangerate/statistics` | Estadísticas de uso |
 | `GET` | `/api/exchangerate/currencies` | Divisas soportadas |
 
-### 💱 Ejemplo de Request
+### ⚙️ Administration Endpoints (NUEVO)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `GET` | `/api/admin/apis/status` | Estado actual de todas las APIs |
+| `PUT` | `/api/admin/apis/{apiName}/toggle` | Habilitar/deshabilitar una API específica |
+| `PUT` | `/api/admin/apis/bulk-toggle` | Cambiar estado de múltiples APIs |
+| `POST` | `/api/admin/statistics/reset` | Resetear estadísticas del servicio |
+
+## ⚙️ Gestión Dinámica de APIs
+
+### 🔍 Ver estado de todas las APIs
+
+```bash
+curl --location 'http://localhost:5055/api/admin/apis/status'
+```
+
+**Response:**
+```json
+{
+  "apis": [
+    {
+      "name": "API1",
+      "isEnabled": true,
+      "url": "http://localhost:5055/api1",
+      "isHealthy": true
+    },
+    {
+      "name": "API2",
+      "isEnabled": true,
+      "url": "http://localhost:5055/api2",
+      "isHealthy": true
+    },
+    {
+      "name": "API3",
+      "isEnabled": false,
+      "url": "http://localhost:5055/api3",
+      "isHealthy": false
+    }
+  ],
+  "timestamp": "2025-08-04T16:30:00Z"
+}
+```
+
+### 🔄 Deshabilitar una API específica
+
+```bash
+curl --location --request PUT 'http://localhost:5055/api/admin/apis/API1/toggle' \
+--header 'Content-Type: application/json' \
+--data '{
+  "enabled": false
+}'
+```
+
+**Response:**
+```json
+{
+  "apiName": "API1",
+  "enabled": false,
+  "message": "API API1 has been disabled",
+  "timestamp": "2025-08-04T16:30:00Z"
+}
+```
+
+### 🔄 Cambiar múltiples APIs a la vez
+
+```bash
+curl --location --request PUT 'http://localhost:5055/api/admin/apis/bulk-toggle' \
+--header 'Content-Type: application/json' \
+--data '{
+  "apis": [
+    {
+      "apiName": "API1",
+      "enabled": false
+    },
+    {
+      "apiName": "API2",
+      "enabled": true
+    },
+    {
+      "apiName": "API3",
+      "enabled": true
+    }
+  ]
+}'
+```
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "apiName": "API1",
+      "enabled": false,
+      "success": true,
+      "errorMessage": null
+    },
+    {
+      "apiName": "API2", 
+      "enabled": true,
+      "success": true,
+      "errorMessage": null
+    },
+    {
+      "apiName": "API3",
+      "enabled": true,
+      "success": true,
+      "errorMessage": null
+    }
+  ],
+  "successCount": 3,
+  "failureCount": 0,
+  "timestamp": "2025-08-04T16:30:00Z"
+}
+```
+
+### 📊 Resetear estadísticas
+
+```bash
+curl --location --request POST 'http://localhost:5055/api/admin/statistics/reset'
+```
+
+**Response:**
+```json
+{
+  "message": "Statistics have been successfully reset",
+  "timestamp": "2025-08-04T16:30:00Z"
+}
+```
+
+## 💱 Ejemplo de Request Principal
 
 ```json
 curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
@@ -191,10 +330,13 @@ curl --location 'http://localhost:5055/api/exchangerate/best-rate' \
 ```
 
 
+
+
 ## 🧪 Testing
 
-./EchangeRateComparison.test/generateReportCoverageTest.sh
-
+```bash
+./ExchangeRateComparison.test/generateReportCoverageTest.sh
+```
 
 ### Health Check
 
@@ -235,38 +377,4 @@ curl -X POST http://localhost:5055/api3/exchange \
 - **Docker** - Containerización
 - **HttpClient** - Comunicación con APIs externas
 
-
-### Problema: "Authentication failed"
-```bash
-# Verificar API keys en headers
-# API1: demo-api-key-1, test-api-key-1, valid-key-1
-# API2: demo-api-key-2, test-api-key-2, valid-key-2  
-# API3: demo-api-key-3, test-api-key-3, valid-key-3
-```
-
-### Problema: "All APIs failed"
-```bash
-# Verificar health check
-curl http://localhost:5055/api/exchangerate/health
-
-# Ver logs del contenedor
-docker logs exchange-rate-api
-```
-
-### Problema: "Swagger no se abre"
-```bash
-# Usar la URL completa
-http://localhost:5055/index.html
-
-# Verificar que Docker esté corriendo
-docker ps
-```
-
-### Problema: "Authentication failed"
-```bash
-# Verificar API keys en headers
-# API1: demo-api-key-1, test-api-key-1, valid-key-1
-# API2: demo-api-key-2, test-api-key-2, valid-key-2  
-# API3: demo-api-key-3, test-api-key-3, valid-key-3
-```
 
